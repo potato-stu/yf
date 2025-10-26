@@ -69,10 +69,15 @@
     /* 省界可见性增强（WMS层图像滤镜） */
     .province-wms img{ filter: drop-shadow(0 0 2px #00baff) contrast(1.35) saturate(1.6); }
 
-    .status-bar{ position:absolute; left:0; right:0; bottom:0; height:38px; background:var(--panel-strong); border-top:1px solid var(--line);
-      display:flex; align-items:center; justify-content:space-between; padding:0 16px; z-index:30; backdrop-filter:var(--blur); box-shadow:var(--shadow); color:#9db8df; font-size:12px; }
+    .status-bar{ position:absolute; left:0; right:0; bottom:0; height:52px; background:var(--panel-strong); border-top:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; padding:0 18px; z-index:30; backdrop-filter:var(--blur); box-shadow:var(--shadow); color:#9db8df; font-size:12px; }
+    .status-left{ display:flex; flex-direction:column; gap:6px; }
+    .status-metrics{ display:flex; align-items:center; gap:18px; }
     .badge{ display:flex; align-items:center; gap:8px; }
     .dot{ width:10px; height:10px; border-radius:50%; } .blue{ background:#4fa8ff;} .orange{ background:#ff9100;} .green{ background:#00e676; }
+    .data-source{ font-size:11px; color:#7fa6ff; display:flex; align-items:center; gap:6px; }
+    .data-source .status-online{ color:#9cffd0; font-weight:600; }
+    .data-source .status-offline{ color:#ffb74d; font-weight:600; }
   </style>
 </head>
 <body>
@@ -131,15 +136,28 @@
   </div>
 
   <div class="status-bar">
-    <div>监测区域：福建、浙江、江西、广东重点区域</div>
-    <div style="display:flex; gap: 18px;">
-      <div class="badge"><span class="dot blue"></span>监测：1,203</div>
-      <div class="badge"><span class="dot orange"></span>预警：3</div>
-      <div class="badge"><span class="dot green"></span>安全：152</div>
+    <div class="status-left">
+      <div>监测区域：福建、浙江、江西、广东重点区域</div>
+      <div class="data-source">数据源：<span id="dataSourceLabel" class="status-offline">本地演示数据</span></div>
+    </div>
+    <div class="status-metrics">
+      <div class="badge"><span class="dot blue"></span>监测：<span id="stat-monitoring">1,203</span></div>
+      <div class="badge"><span class="dot orange"></span>预警：<span id="stat-warning">3</span></div>
+      <div class="badge"><span class="dot green"></span>安全：<span id="stat-safe">152</span></div>
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import {
+      fetchMonitoringSites,
+      subscribeMonitoringSites,
+      fetchRiskAreas,
+      subscribeRiskAreas,
+      fetchDashboardStats,
+      subscribeDashboardStats,
+      getCloudStatus
+    } from './js/cloud-database.js';
+
     // -------- OpenLayers 初始化 --------
     const { Map, View, layer, source, proj, style } = ol;
     const { Tile, Vector, Image: ImageLayer, VectorTile } = layer;
@@ -152,6 +170,9 @@
     let provinceOutlineVector;  // 省界（可选：GeoJSON/矢量瓦片）
     let monitoringLayer;        // 监测点
     let riskLayer;              // 风险圈
+    let unsubscribeMonitoring = null;
+    let unsubscribeRiskAreas = null;
+    let unsubscribeDashboard = null;
 
     // === 可在此处配置自己的矢量边界 ===
     // 1) GeoJSON URL（同目录或完整地址，需支持CORS）
@@ -194,8 +215,9 @@
       map = new Map({ target:'map', layers:[baseSatellite, baseTerrain, baseOSM, provinceOutlineWMS, riskLayer, monitoringLayer], view });
       setTimeout(()=> map.updateSize(), 80);
 
-      addMonitoringPoints();
-      addRiskDemo();
+      loadMonitoringPoints();
+      loadRiskAreas();
+      loadDashboardStats();
       setupOptionalVectorBoundary(); // 如果你配置了 GEOJSON_URL 或 MVT_URL，这里会加载
       bindUI();
       guardTiles();
@@ -234,18 +256,96 @@
       }
     }
 
-    function addMonitoringPoints(){
-      const src = monitoringLayer.getSource(); src.clear();
-      const pts = [
-        { name: '武平监测点', lon: 116.10, lat: 25.10 },
-        { name: '泰顺监测点', lon: 119.72, lat: 27.56 }
-      ];
-      pts.forEach(p => src.addFeature(new ol.Feature({ geometry: new ol.geom.Point(fromLonLat([p.lon, p.lat])), name: p.name })));
+    function renderMonitoringPoints(points = []){
+      const src = monitoringLayer.getSource();
+      src.clear();
+      points
+        .filter(p => typeof p.lon === 'number' && typeof p.lat === 'number')
+        .forEach((p) => {
+          const feature = new ol.Feature({
+            geometry: new ol.geom.Point(fromLonLat([p.lon, p.lat])),
+            name: p.name || '监测点'
+          });
+          src.addFeature(feature);
+        });
     }
-    function addRiskDemo(){
-      const src = riskLayer.getSource(); src.clear();
-      src.addFeature(new ol.Feature({ geometry: new ol.geom.Circle(fromLonLat([116.10, 25.10]), 15000) }));
-      src.addFeature(new ol.Feature({ geometry: new ol.geom.Circle(fromLonLat([119.72, 27.56]), 15000) }));
+
+    async function loadMonitoringPoints(){
+      const points = await fetchMonitoringSites();
+      renderMonitoringPoints(points);
+      updateCloudStatusIndicator();
+      if (typeof unsubscribeMonitoring === 'function') unsubscribeMonitoring();
+      unsubscribeMonitoring = subscribeMonitoringSites((items) => {
+        renderMonitoringPoints(items);
+        updateCloudStatusIndicator();
+      });
+    }
+
+    function renderRiskAreas(areas = []){
+      const src = riskLayer.getSource();
+      src.clear();
+      areas
+        .filter(a => typeof a.lon === 'number' && typeof a.lat === 'number')
+        .forEach((area) => {
+          const radius = Number(area.radius) > 0 ? Number(area.radius) : 1000;
+          const circle = new ol.geom.Circle(fromLonLat([area.lon, area.lat]), radius);
+          const feature = new ol.Feature({ geometry: circle, name: area.name || '风险区域' });
+          src.addFeature(feature);
+        });
+    }
+
+    async function loadRiskAreas(){
+      const areas = await fetchRiskAreas();
+      renderRiskAreas(areas);
+      updateCloudStatusIndicator();
+      if (typeof unsubscribeRiskAreas === 'function') unsubscribeRiskAreas();
+      unsubscribeRiskAreas = subscribeRiskAreas((items) => {
+        renderRiskAreas(items);
+        updateCloudStatusIndicator();
+      });
+    }
+
+    function updateStatusBar(stats = {}){
+      const monitoring = document.getElementById('stat-monitoring');
+      const warning = document.getElementById('stat-warning');
+      const safe = document.getElementById('stat-safe');
+      if (monitoring) monitoring.textContent = formatNumber(stats.monitoring ?? stats.monitoringCount ?? 0);
+      if (warning) warning.textContent = formatNumber(stats.warning ?? stats.warningCount ?? 0);
+      if (safe) safe.textContent = formatNumber(stats.safe ?? stats.safeCount ?? 0);
+    }
+
+    function formatNumber(value){
+      const num = Number(value);
+      if (Number.isFinite(num)) return num.toLocaleString('zh-CN');
+      return value || '-';
+    }
+
+    async function loadDashboardStats(){
+      const stats = await fetchDashboardStats();
+      updateStatusBar(stats);
+      updateCloudStatusIndicator();
+      if (typeof unsubscribeDashboard === 'function') unsubscribeDashboard();
+      unsubscribeDashboard = subscribeDashboardStats((current) => {
+        updateStatusBar(current);
+        updateCloudStatusIndicator();
+      });
+    }
+
+    function updateCloudStatusIndicator(){
+      const label = document.getElementById('dataSourceLabel');
+      if (!label) return;
+      const status = getCloudStatus();
+      label.classList.remove('status-online', 'status-offline');
+      if (!status.configured){
+        label.textContent = '本地演示数据（未配置云数据库）';
+        label.classList.add('status-offline');
+      } else if (status.usingFallback){
+        label.textContent = '演示数据（云数据库暂不可用）';
+        label.classList.add('status-offline');
+      } else {
+        label.textContent = '云数据库实时数据';
+        label.classList.add('status-online');
+      }
     }
 
     function bindUI(){
@@ -289,7 +389,11 @@
 
     function tickTime(){ document.getElementById('time').textContent = new Date().toLocaleString('zh-CN',{hour12:false}); }
     setInterval(tickTime,1000);
-    document.addEventListener('DOMContentLoaded', ()=>{ tickTime(); initMap(); });
+    document.addEventListener('DOMContentLoaded', ()=>{
+      updateCloudStatusIndicator();
+      tickTime();
+      initMap();
+    });
   </script>
 </body>
 </html>
