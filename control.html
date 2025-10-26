@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>韧性防控模块 - 东南地区滑坡防御平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@300;400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-bg: #0a0e1a;
+            --secondary-bg: #1a1f2e;
+            --accent-bg: #252b3d;
+            --card-bg: rgba(26, 31, 46, 0.9);
+            --border-color: #2d3748;
+            --primary-blue: #00d4ff;
+            --secondary-blue: #0099cc;
+            --accent-cyan: #00ff88;
+            --warning-orange: #ff6b35;
+            --danger-red: #ff4757;
+            --success-green: #2ecc71;
+            --text-primary: #ffffff;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --glow-blue: 0 0 20px rgba(0, 212, 255, 0.5);
+            --glow-cyan: 0 0 20px rgba(0, 255, 136, 0.5);
+            --glow-orange: 0 0 20px rgba(255, 107, 53, 0.5);
+            --glow-red: 0 0 20px rgba(255, 71, 87, 0.5);
+            --glow-green: 0 0 20px rgba(46, 204, 113, 0.5);
+        }
+
+        body {
+            font-family: 'Rajdhani', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 50%, #252b3d 100%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* 科技感背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(46, 204, 113, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(46, 204, 113, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            z-index: -1;
+        }
+
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 顶部导航 */
+        .top-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 15px 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .back-btn {
+            background: linear-gradient(135deg, var(--success-green), #27ae60);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--glow-green);
+        }
+
+        .module-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--success-green);
+            text-shadow: var(--glow-green);
+        }
+
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--success-green);
+            box-shadow: var(--glow-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        /* 应急指挥中心 */
+        .command-center {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .command-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .command-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--success-green);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .emergency-level {
+            display: flex;
+            gap: 10px;
+        }
+
+        .level-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .level-btn.normal {
+            background: rgba(46, 204, 113, 0.2);
+            border-color: var(--success-green);
+            color: var(--success-green);
+        }
+
+        .level-btn.warning {
+            background: rgba(255, 107, 53, 0.2);
+            border-color: var(--warning-orange);
+            color: var(--warning-orange);
+        }
+
+        .level-btn.emergency {
+            background: rgba(255, 71, 87, 0.2);
+            border-color: var(--danger-red);
+            color: var(--danger-red);
+        }
+
+        .level-btn.active {
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        /* 主要内容区域 */
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* 防控措施面板 */
+        .control-measures {
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .measures-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .measures-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--success-green);
+        }
+
+        .measures-content {
+            padding: 20px;
+        }
+
+        .measure-category {
+            margin-bottom: 25px;
+        }
+
+        .category-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .measure-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .measure-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(45, 55, 72, 0.3);
+            border-radius: 8px;
+            border-left: 3px solid var(--success-green);
+            transition: all 0.3s ease;
+        }
+
+        .measure-item:hover {
+            background: rgba(46, 204, 113, 0.1);
+            transform: translateX(5px);
+        }
+
+        .measure-info {
+            flex: 1;
+        }
+
+        .measure-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+
+        .measure-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .measure-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(46, 204, 113, 0.2);
+            color: var(--success-green);
+        }
+
+        .status-pending {
+            background: rgba(255, 107, 53, 0.2);
+            color: var(--warning-orange);
+        }
+
+        .status-inactive {
+            background: rgba(113, 128, 150, 0.2);
+            color: var(--text-muted);
+        }
+
+        .action-btn {
+            background: none;
+            border: 1px solid var(--success-green);
+            color: var(--success-green);
+            padding: 4px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .action-btn:hover {
+            background: var(--success-green);
+            color: white;
+            box-shadow: var(--glow-green);
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .info-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--success-green);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 系统状态 */
+        .system-status {
+            display: grid;
+            gap: 12px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: rgba(45, 55, 72, 0.3);
+            border-radius: 8px;
+        }
+
+        .status-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .status-value {
+            font-weight: 600;
+            font-family: 'Orbitron', monospace;
+        }
+
+        .status-online {
+            color: var(--success-green);
+        }
+
+        .status-warning {
+            color: var(--warning-orange);
+        }
+
+        .status-error {
+            color: var(--danger-red);
+        }
+
+        /* 应急资源 */
+        .resource-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .resource-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: rgba(45, 55, 72, 0.3);
+            border-radius: 8px;
+        }
+
+        .resource-name {
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .resource-count {
+            font-weight: 600;
+            font-family: 'Orbitron', monospace;
+            color: var(--accent-cyan);
+        }
+
+        /* 应急响应流程 */
+        .response-workflow {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .workflow-steps {
+            display: grid;
+            gap: 15px;
+        }
+
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(45, 55, 72, 0.3);
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .workflow-step.active {
+            border-left: 4px solid var(--success-green);
+            background: rgba(46, 204, 113, 0.1);
+        }
+
+        .workflow-step.completed {
+            border-left: 4px solid var(--accent-cyan);
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .step-number {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--success-green);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .step-number.completed {
+            background: var(--accent-cyan);
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+
+        .step-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .step-time {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'Orbitron', monospace;
+        }
+
+        /* 快速操作按钮 */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .quick-btn {
+            background: linear-gradient(135deg, var(--success-green), #27ae60);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .quick-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--glow-green);
+        }
+
+        .quick-btn.emergency {
+            background: linear-gradient(135deg, var(--danger-red), #e74c3c);
+        }
+
+        .quick-btn.emergency:hover {
+            box-shadow: var(--glow-red);
+        }
+
+        .quick-btn.warning {
+            background: linear-gradient(135deg, var(--warning-orange), #e67e22);
+        }
+
+        .quick-btn.warning:hover {
+            box-shadow: var(--glow-orange);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .command-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .emergency-level {
+                justify-content: center;
+            }
+            
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航 -->
+        <nav class="top-nav">
+    <div class="nav-left">
+        <a href="./index.html" class="back-btn" onclick="console.log('点击返回按钮')">
+            ← 返回主界面
+        </a>
+                <h1 class="module-title">🛡️ 韧性防控模块</h1>
+            </div>
+            <div class="status-info">
+                <div class="status-dot"></div>
+                <span>防控系统运行中</span>
+                <span id="currentTime"></span>
+            </div>
+        </nav>
+
+        <!-- 应急指挥中心 -->
+        <div class="command-center">
+            <div class="command-header">
+                <h2 class="command-title">
+                    🎯 应急指挥中心
+                </h2>
+                <div class="emergency-level">
+                    <button class="level-btn normal active" onclick="setEmergencyLevel('normal')">正常</button>
+                    <button class="level-btn warning" onclick="setEmergencyLevel('warning')">预警</button>
+                    <button class="level-btn emergency" onclick="setEmergencyLevel('emergency')">紧急</button>
+                </div>
+            </div>
+            
+            <div class="quick-actions">
+                <button class="quick-btn emergency" onclick="activateEmergencyResponse()">
+                    🚨 启动应急响应
+                </button>
+                <button class="quick-btn warning" onclick="issueEvacuationOrder()">
+                    📢 发布疏散指令
+                </button>
+                <button class="quick-btn" onclick="deployRescueTeam()">
+                    🚁 调度救援队伍
+                </button>
+                <button class="quick-btn" onclick="coordinateResources()">
+                    📦 协调应急资源
+                </button>
+            </div>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="main-content">
+            <!-- 防控措施面板 -->
+            <div class="control-measures">
+                <div class="measures-header">
+                    <h3 class="measures-title">🛠️ 防控措施管理</h3>
+                </div>
+                <div class="measures-content">
+                    <!-- 预防措施 -->
+                    <div class="measure-category">
+                        <h4 class="category-title">
+                            🔒 预防措施
+                        </h4>
+                        <div class="measure-list">
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">地质监测网络</div>
+                                    <div class="measure-desc">实时监测地质变化，提供早期预警</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-active">运行中</span>
+                                    <button class="action-btn" onclick="manageMeasure('monitoring')">管理</button>
+                                </div>
+                            </div>
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">排水系统优化</div>
+                                    <div class="measure-desc">改善坡面排水，降低滑坡风险</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-active">运行中</span>
+                                    <button class="action-btn" onclick="manageMeasure('drainage')">管理</button>
+                                </div>
+                            </div>
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">植被恢复工程</div>
+                                    <div class="measure-desc">增强坡面稳定性，防止水土流失</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-pending">进行中</span>
+                                    <button class="action-btn" onclick="manageMeasure('vegetation')">管理</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 应急措施 -->
+                    <div class="measure-category">
+                        <h4 class="category-title">
+                            🚨 应急措施
+                        </h4>
+                        <div class="measure-list">
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">人员疏散系统</div>
+                                    <div class="measure-desc">快速疏散危险区域人员</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-active">待命</span>
+                                    <button class="action-btn" onclick="manageMeasure('evacuation')">启动</button>
+                                </div>
+                            </div>
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">救援队伍调度</div>
+                                    <div class="measure-desc">协调专业救援力量</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-active">待命</span>
+                                    <button class="action-btn" onclick="manageMeasure('rescue')">调度</button>
+                                </div>
+                            </div>
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">应急物资配送</div>
+                                    <div class="measure-desc">快速配送救援物资</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-active">待命</span>
+                                    <button class="action-btn" onclick="manageMeasure('supplies')">配送</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 恢复措施 -->
+                    <div class="measure-category">
+                        <h4 class="category-title">
+                            🔄 恢复措施
+                        </h4>
+                        <div class="measure-list">
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">灾后评估</div>
+                                    <div class="measure-desc">评估灾害损失和影响范围</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-inactive">未启动</span>
+                                    <button class="action-btn" onclick="manageMeasure('assessment')">启动</button>
+                                </div>
+                            </div>
+                            <div class="measure-item">
+                                <div class="measure-info">
+                                    <div class="measure-name">基础设施修复</div>
+                                    <div class="measure-desc">修复受损的基础设施</div>
+                                </div>
+                                <div class="measure-status">
+                                    <span class="status-badge status-inactive">未启动</span>
+                                    <button class="action-btn" onclick="manageMeasure('repair')">启动</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <!-- 系统状态 -->
+                <div class="info-card">
+                    <h3 class="card-title">📊 系统状态</h3>
+                    <div class="system-status">
+                        <div class="status-item">
+                            <span class="status-label">监测系统</span>
+                            <span class="status-value status-online">在线</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">预警系统</span>
+                            <span class="status-value status-online">正常</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">通信系统</span>
+                            <span class="status-value status-online">畅通</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">应急队伍</span>
+                            <span class="status-value status-online">待命</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">物资储备</span>
+                            <span class="status-value status-warning">充足</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 应急资源 -->
+                <div class="info-card">
+                    <h3 class="card-title">📦 应急资源</h3>
+                    <div class="resource-list">
+                        <div class="resource-item">
+                            <span class="resource-name">救援人员</span>
+                            <span class="resource-count">156人</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-name">救援车辆</span>
+                            <span class="resource-count">23辆</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-name">医疗设备</span>
+                            <span class="resource-count">45套</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-name">通信设备</span>
+                            <span class="resource-count">78台</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-name">应急物资</span>
+                            <span class="resource-count">2.3万件</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 应急响应流程 -->
+        <div class="response-workflow">
+            <h3 class="card-title">🔄 应急响应流程</h3>
+            <div class="workflow-steps">
+                <div class="workflow-step completed">
+                    <div class="step-number completed">1</div>
+                    <div class="step-content">
+                        <div class="step-title">风险识别</div>
+                        <div class="step-desc">通过监测系统识别潜在滑坡风险</div>
+                    </div>
+                    <div class="step-time">已完成</div>
+                </div>
+                <div class="workflow-step completed">
+                    <div class="step-number completed">2</div>
+                    <div class="step-content">
+                        <div class="step-title">预警发布</div>
+                        <div class="step-desc">向相关部门和公众发布预警信息</div>
+                    </div>
+                    <div class="step-time">已完成</div>
+                </div>
+                <div class="workflow-step active">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title">应急响应</div>
+                        <div class="step-desc">启动应急预案，调度救援资源</div>
+                    </div>
+                    <div class="step-time">进行中</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <div class="step-title">救援行动</div>
+                        <div class="step-desc">实施人员疏散和救援行动</div>
+                    </div>
+                    <div class="step-time">待执行</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">5</div>
+                    <div class="step-content">
+                        <div class="step-title">灾后恢复</div>
+                        <div class="step-desc">评估损失，实施恢复重建</div>
+                    </div>
+                    <div class="step-time">待执行</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentEmergencyLevel = 'normal';
+
+        // 设置应急等级
+        function setEmergencyLevel(level) {
+            currentEmergencyLevel = level;
+            
+            // 更新按钮状态
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`.level-btn.${level}`).classList.add('active');
+            
+            // 根据等级调整界面
+            updateInterfaceByLevel(level);
+            
+            console.log(`应急等级设置为: ${level}`);
+        }
+
+        // 根据应急等级更新界面
+        function updateInterfaceByLevel(level) {
+            const body = document.body;
+            body.className = ''; // 清除现有类
+            
+            switch(level) {
+                case 'normal':
+                    // 正常状态 - 绿色主题
+                    break;
+                case 'warning':
+                    // 预警状态 - 橙色主题
+                    body.classList.add('warning-mode');
+                    break;
+                case 'emergency':
+                    // 紧急状态 - 红色主题
+                    body.classList.add('emergency-mode');
+                    break;
+            }
+        }
+
+        // 启动应急响应
+        function activateEmergencyResponse() {
+            if (confirm('确认启动应急响应？\n\n这将：\n- 通知所有相关部门\n- 调度应急资源\n- 启动救援程序\n- 发布公众通告')) {
+                alert('🚨 应急响应已启动！\n\n执行内容：\n✅ 应急指挥部已激活\n✅ 救援队伍正在集结\n✅ 通信网络已建立\n✅ 物资调配开始\n\n预计15分钟内到达现场');
+                
+                // 更新工作流程状态
+                updateWorkflowStatus();
+            }
+        }
+
+        // 发布疏散指令
+        function issueEvacuationOrder() {
+            const area = prompt('请输入疏散区域：', '福建省南平市XX区域');
+            if (area) {
+                alert(`📢 疏散指令已发布！\n\n疏散区域：${area}\n疏散人数：约500人\n疏散路线：已规划3条安全路线\n安置点：XX小学体育馆\n\n预计疏散时间：2小时`);
+            }
+        }
+
+        // 调度救援队伍
+        function deployRescueTeam() {
+            alert('🚁 救援队伍调度中...\n\n调度情况：\n🚑 医疗救援队：5支队伍，30人\n🚒 消防救援队：3支队伍，45人\n👮 公安队伍：2支队伍，20人\n🏗️ 工程抢险队：1支队伍，15人\n\n预计到达时间：20-30分钟');
+        }
+
+        // 协调应急资源
+        function coordinateResources() {
+            alert('📦 应急资源协调中...\n\n资源调配：\n🏥 医疗物资：充足\n🍞 生活物资：充足\n⛺ 临时住所：准备中\n🔌 应急电源：已备用\n📡 通信设备：已部署\n\n物资运输：30分钟内到达');
+        }
+
+        // 管理防控措施
+        function manageMeasure(measureType) {
+            const measures = {
+                'monitoring': '地质监测网络管理',
+                'drainage': '排水系统管理',
+                'vegetation': '植被恢复工程管理',
+                'evacuation': '人员疏散系统',
+                'rescue': '救援队伍调度',
+                'supplies': '应急物资配送',
+                'assessment': '灾后评估',
+                'repair': '基础设施修复'
+            };
+            
+            alert(`${measures[measureType]}\n\n功能选项：\n- 查看详细状态\n- 修改配置参数\n- 启动/停止服务\n- 查看历史记录\n- 生成状态报告\n\n请选择操作...`);
+        }
+
+        // 更新工作流程状态
+        function updateWorkflowStatus() {
+            const steps = document.querySelectorAll('.workflow-step');
+            
+            // 模拟流程推进
+            setTimeout(() => {
+                steps[2].classList.remove('active');
+                steps[2].classList.add('completed');
+                steps[2].querySelector('.step-number').classList.add('completed');
+                steps[2].querySelector('.step-time').textContent = '已完成';
+                
+                steps[3].classList.add('active');
+                steps[3].querySelector('.step-time').textContent = '进行中';
+            }, 2000);
+        }
+
+        // 更新时间
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        // 模拟系统状态更新
+        function updateSystemStatus() {
+            const statusItems = document.querySelectorAll('.status-value');
+            const statuses = ['在线', '正常', '畅通', '待命', '充足'];
+            const classes = ['status-online', 'status-online', 'status-online', 'status-online', 'status-warning'];
+            
+            statusItems.forEach((item, index) => {
+                if (Math.random() > 0.9) { // 10% 概率状态变化
+                    item.className = 'status-value ' + (Math.random() > 0.5 ? 'status-online' : 'status-warning');
+                }
+            });
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('韧性防控模块已加载');
+            updateTime();
+            setInterval(updateTime, 1000);
+            setInterval(updateSystemStatus, 15000); // 每15秒更新系统状态
+            
+            // 设置初始应急等级
+            setEmergencyLevel('normal');
+        });
+
+        // 键盘快捷键
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey) {
+                switch(event.key) {
+                    case '1':
+                        event.preventDefault();
+                        setEmergencyLevel('normal');
+                        break;
+                    case '2':
+                        event.preventDefault();
+                        setEmergencyLevel('warning');
+                        break;
+                    case '3':
+                        event.preventDefault();
+                        setEmergencyLevel('emergency');
+                        break;
+                    case 'e':
+                        event.preventDefault();
+                        activateEmergencyResponse();
+                        break;
+                }
+            }
+        });
+    </script>
+</body>
+</html>

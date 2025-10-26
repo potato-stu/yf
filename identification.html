@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>精确识别模块 - 东南降雨型群发滑坡智能防控系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://webapi.amap.com/maps?v=2.0&key=9b52a608e20087d83922886875623248"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #2a2a2a;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --text-muted: #666666;
+            --primary-blue: #00d4ff;
+            --accent-cyan: #00ff88;
+            --warning-orange: #ff6b35;
+            --danger-red: #ff4757;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --glow-blue: 0 0 20px rgba(0, 212, 255, 0.5);
+            --glow-cyan: 0 0 20px rgba(0, 255, 136, 0.5);
+            --glow-orange: 0 0 20px rgba(255, 107, 53, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 顶部导航 */
+        .top-nav {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .back-btn {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .back-btn:hover {
+            color: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+            transform: translateX(-3px);
+        }
+
+        .module-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* 主要内容区域 */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 30px;
+            height: calc(100vh - 80px); /* 设置固定高度 */
+        }
+
+        /* 地图区域 */
+        .map-section {
+            background: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100%; /* 填满整个高度 */
+        }
+
+        .map-header {
+            padding: 20px 25px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0; /* 防止头部被压缩 */
+        }
+
+        .map-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn.active {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: white;
+            box-shadow: var(--glow-cyan);
+        }
+
+        .control-btn:hover {
+            background: rgba(0, 255, 136, 0.3);
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+
+        #mapContainer {
+            width: 100%;
+            flex: 1; /* 占用剩余所有空间 */
+            position: relative;
+            border-radius: 0 0 15px 15px;
+            overflow: hidden;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%; /* 填满整个高度 */
+            overflow-y: auto; /* 如果内容过多，允许滚动 */
+        }
+
+        .info-card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+            padding: 20px;
+            transition: all 0.3s ease;
+            flex-shrink: 0; /* 防止卡片被压缩 */
+        }
+
+        .info-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-icon {
+            color: var(--accent-cyan);
+        }
+
+        /* 统计数据 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            color: var(--primary-blue);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* 风险等级列表 */
+        .risk-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .risk-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .risk-item.high {
+            border-left-color: var(--danger-red);
+        }
+
+        .risk-item.medium {
+            border-left-color: var(--warning-orange);
+        }
+
+        .risk-item.low {
+            border-left-color: var(--accent-cyan);
+        }
+
+        .risk-item:hover {
+            background: rgba(0, 0, 0, 0.5);
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .risk-item.selected {
+            background: rgba(0, 255, 136, 0.1);
+            border-left-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .risk-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .risk-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .risk-location {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .risk-level {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .risk-level.high {
+            background: rgba(255, 71, 87, 0.2);
+            color: var(--danger-red);
+        }
+
+        .risk-level.medium {
+            background: rgba(255, 107, 53, 0.2);
+            color: var(--warning-orange);
+        }
+
+        .risk-level.low {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        /* 实时数据 */
+        .realtime-data {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-item:last-child {
+            border-bottom: none;
+        }
+
+        .data-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .data-value {
+            font-family: 'Orbitron', monospace;
+            font-weight: 600;
+            color: var(--primary-blue);
+        }
+
+        /* 自定义信息窗口样式 */
+        .custom-info-window {
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 12px;
+            padding: 18px;
+            color: var(--text-primary);
+            backdrop-filter: blur(15px);
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(0, 255, 136, 0.3);
+            max-width: 280px;
+        }
+
+        .info-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--accent-cyan);
+        }
+
+        .info-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+                height: auto; /* 在小屏幕上允许自动高度 */
+            }
+
+            .map-section {
+                height: 60vh; /* 在小屏幕上设置固定高度 */
+            }
+
+            .sidebar {
+                height: auto;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                display: grid;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-container {
+                padding: 0 20px;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .map-controls {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .control-btn {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+
+            .map-section {
+                height: 50vh;
+            }
+
+            .sidebar {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="top-nav">
+        <div class="nav-container">
+            <div class="nav-left">
+                <a href="./index.html" class="back-btn" onclick="console.log('点击返回按钮')">
+                    <i class="fas fa-arrow-left"></i>
+                    返回主界面
+                </a>
+                <h1 class="module-title">
+                    <i class="fas fa-search"></i>
+                    精确识别模块
+                </h1>
+            </div>
+            <div class="nav-right">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    系统运行正常
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="main-content">
+        <!-- 地图区域 -->
+        <div class="map-section">
+            <div class="map-header">
+                <h2 class="map-title">
+                    <i class="fas fa-map-marked-alt"></i>
+                    滑坡隐患点分布图
+                </h2>
+                <div class="map-controls">
+                    <button class="control-btn active" onclick="toggleLayer('all')">全部显示</button>
+                    <button class="control-btn" onclick="toggleLayer('high')">高风险</button>
+                    <button class="control-btn" onclick="toggleLayer('medium')">中风险</button>
+                    <button class="control-btn" onclick="toggleLayer('low')">低风险</button>
+                    <button class="control-btn" onclick="switchMapStyle('satellite')">卫星图</button>
+                    <button class="control-btn active" onclick="switchMapStyle('standard')">标准图</button>
+                    <button class="control-btn" onclick="switchMapStyle('dark')">暗色图</button>
+                </div>
+            </div>
+            <div id="mapContainer"></div>
+        </div>
+
+        <!-- 侧边栏 -->
+        <div class="sidebar">
+            <!-- 统计概览 -->
+            <div class="info-card">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-bar card-icon"></i>
+                    统计概览
+                </h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value">156</div>
+                        <div class="stat-label">总隐患点</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">23</div>
+                        <div class="stat-label">高风险点</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">67</div>
+                        <div class="stat-label">中风险点</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">66</div>
+                        <div class="stat-label">低风险点</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 重点关注区域 -->
+            <div class="info-card">
+                <h3 class="card-title">
+                    <i class="fas fa-exclamation-triangle card-icon"></i>
+                    重点关注区域
+                </h3>
+                <div class="risk-list">
+                    <div class="risk-item high" onclick="jumpToLocation('longyan')" data-location="longyan">
+                        <div class="risk-info">
+                            <div class="risk-name">福建省龙岩市</div>
+                            <div class="risk-location">武平县</div>
+                        </div>
+                        <div class="risk-level high">高风险</div>
+                    </div>
+                    <div class="risk-item high" onclick="jumpToLocation('wenzhou')" data-location="wenzhou">
+                        <div class="risk-info">
+                            <div class="risk-name">浙江省温州市</div>
+                            <div class="risk-location">泰顺县</div>
+                        </div>
+                        <div class="risk-level high">高风险</div>
+                    </div>
+                    <div class="risk-item medium" onclick="jumpToLocation('fuzhou')" data-location="fuzhou">
+                        <div class="risk-info">
+                            <div class="risk-name">福建省福州市</div>
+                            <div class="risk-location">闽侯县</div>
+                        </div>
+                        <div class="risk-level medium">中风险</div>
+                    </div>
+                    <div class="risk-item medium" onclick="jumpToLocation('xiamen')" data-location="xiamen">
+                        <div class="risk-info">
+                            <div class="risk-name">福建省厦门市</div>
+                            <div class="risk-location">同安区</div>
+                        </div>
+                        <div class="risk-level medium">中风险</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时监测数据 -->
+            <div class="info-card">
+                <h3 class="card-title">
+                    <i class="fas fa-satellite-dish card-icon"></i>
+                    实时监测数据
+                </h3>
+                <div class="realtime-data">
+                    <div class="data-item">
+                        <span class="data-label">降雨量 (24h)</span>
+                        <span class="data-value">45.2mm</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">土壤含水量</span>
+                        <span class="data-value">78.5%</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">地表位移</span>
+                        <span class="data-value">2.3mm</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">倾斜角度</span>
+                        <span class="data-value">1.2°</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">预警等级</span>
+                        <span class="data-value" style="color: var(--warning-orange);">橙色</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">更新时间</span>
+                        <span class="data-value">2024-01-15 14:30</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let markers = [];
+        let satelliteLayer;
+        let currentMapStyle = 'standard';
+
+        // 重点关注区域的坐标信息
+        const focusAreas = {
+            longyan: {
+                name: '福建省龙岩市武平县',
+                center: [116.1, 25.1],
+                zoom: 12,
+                id: 'FJ003'
+            },
+            wenzhou: {
+                name: '浙江省温州市泰顺县',
+                center: [119.7, 27.6],
+                zoom: 12,
+                id: 'ZJ002'
+            },
+            fuzhou: {
+                name: '福建省福州市闽侯县',
+                center: [119.1, 26.1],
+                zoom: 12,
+                id: 'FJ004'
+            },
+            xiamen: {
+                name: '福建省厦门市同安区',
+                center: [118.1, 24.7],
+                zoom: 12,
+                id: 'XM001'
+            }
+        };
+
+        // 更新滑坡隐患点数据，包含重点关注区域
+        const hazardPoints = [
+            { id: 'FJ003', name: '福建龙岩武平县', position: [116.1, 25.1], risk: 'high', rainfall: '69.4mm', soilMoisture: '87.3%' },
+            { id: 'ZJ002', name: '浙江温州泰顺县', position: [119.7, 27.6], risk: 'high', rainfall: '72.1mm', soilMoisture: '89.7%' },
+            { id: 'FJ004', name: '福建福州闽侯县', position: [119.1, 26.1], risk: 'medium', rainfall: '52.7mm', soilMoisture: '76.8%' },
+            { id: 'XM001', name: '福建厦门同安区', position: [118.1, 24.7], risk: 'medium', rainfall: '45.3mm', soilMoisture: '72.4%' },
+        ];
+
+        // 初始化地图
+        function initMap() {
+            map = new AMap.Map('mapContainer', {
+                zoom: 8,
+                center: [118.8, 26.5],
+                viewMode: '2D',
+                showLabel: true,
+                features: ['bg', 'road', 'building', 'point']
+            });
+
+            // 创建卫星图层
+            satelliteLayer = new AMap.TileLayer.Satellite({
+                visible: false
+            });
+            map.add(satelliteLayer);
+
+            // 添加地图控件
+            map.addControl(new AMap.Scale({
+                position: 'LB'
+            }));
+            
+            map.addControl(new AMap.ToolBar({
+                position: 'RT'
+            }));
+
+            // 添加滑坡隐患点标记
+            addHazardMarkers();
+
+            // 地图加载完成事件
+            map.on('complete', function() {
+                console.log('地图加载完成，当前样式：', currentMapStyle);
+                // 地图加载完成后重新调整大小
+                setTimeout(() => {
+                    map.getSize();
+                }, 100);
+            });
+
+            // 监听窗口大小变化
+            window.addEventListener('resize', function() {
+                map.getSize();
+            });
+        }
+
+        // 添加滑坡隐患点标记
+        function addHazardMarkers() {
+            hazardPoints.forEach(point => {
+                const marker = new AMap.Marker({
+                    position: point.position,
+                    content: createMarkerContent(point.risk, point.id),
+                    anchor: 'center'
+                });
+
+                // 添加点击事件
+                marker.on('click', function() {
+                    showInfoWindow(point, marker);
+                });
+
+                map.add(marker);
+                markers.push({ marker, data: point });
+            });
+        }
+
+        // 创建标记内容
+        function createMarkerContent(risk, id) {
+            let color = '#00ff88';
+            let size = '14px';
+            let shadowColor = 'rgba(0, 255, 136, 0.8)';
+            
+            if (risk === 'high') {
+                color = '#ff4757';
+                size = '18px';
+                shadowColor = 'rgba(255, 71, 87, 0.8)';
+            } else if (risk === 'medium') {
+                color = '#ff6b35';
+                size = '16px';
+                shadowColor = 'rgba(255, 107, 53, 0.8)';
+            }
+
+            return `
+                <div style="
+                    width: ${size};
+                    height: ${size};
+                    background: ${color};
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 
+                        0 0 15px ${shadowColor},
+                        0 0 30px ${shadowColor},
+                        inset 0 0 10px rgba(255, 255, 255, 0.3);
+                    position: relative;
+                    animation: pulse 2s infinite;
+                ">
+                    <div style="
+                        position: absolute;
+                        top: -30px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: rgba(0, 0, 0, 0.9);
+                        color: white;
+                        padding: 4px 8px;
+                        border-radius: 6px;
+                        font-size: 11px;
+                        font-weight: bold;
+                        white-space: nowrap;
+                        border: 1px solid ${color};
+                        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+                    ">${id}</div>
+                </div>
+                <style>
+                    @keyframes pulse {
+                        0%, 100% { 
+                            transform: scale(1);
+                            opacity: 1;
+                        }
+                        50% { 
+                            transform: scale(1.2);
+                            opacity: 0.8;
+                        }
+                    }
+                </style>
+            `;
+        }
+
+        // 显示信息窗口
+        function showInfoWindow(point, marker) {
+            const infoWindow = new AMap.InfoWindow({
+                content: `
+                    <div class="custom-info-window">
+                        <div class="info-title">${point.name}</div>
+                        <div class="info-details">
+                            <div class="info-row">
+                                <span class="info-label">编号:</span>
+                                <span class="info-value">${point.id}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">风险等级:</span>
+                                <span class="info-value" style="color: ${point.risk === 'high' ? '#ff4757' : point.risk === 'medium' ? '#ff6b35' : '#00ff88'}">${point.risk === 'high' ? '高风险' : point.risk === 'medium' ? '中风险' : '低风险'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">降雨量:</span>
+                                <span class="info-value">${point.rainfall}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">土壤含水量:</span>
+                                <span class="info-value">${point.soilMoisture}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">更新时间:</span>
+                                <span class="info-value">2024-01-15 14:30</span>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                anchor: 'bottom-center',
+                offset: new AMap.Pixel(0, -10)
+            });
+
+            infoWindow.open(map, marker.getPosition());
+        }
+
+        // 跳转到指定位置
+        function jumpToLocation(locationKey) {
+            const area = focusAreas[locationKey];
+            if (!area) {
+                console.error('未找到指定区域:', locationKey);
+                return;
+            }
+
+            // 移除所有区域的选中状态
+            document.querySelectorAll('.risk-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+
+            // 添加当前区域的选中状态
+            const currentItem = document.querySelector(`[data-location="${locationKey}"]`);
+            if (currentItem) {
+                currentItem.classList.add('selected');
+            }
+
+            // 地图跳转到指定位置
+            map.setZoomAndCenter(area.zoom, area.center);
+
+            // 找到对应的标记并显示信息窗口
+            const targetMarker = markers.find(m => m.data.id === area.id);
+            if (targetMarker) {
+                setTimeout(() => {
+                    showInfoWindow(targetMarker.data, targetMarker.marker);
+                }, 500);
+            }
+
+            console.log(`跳转到 ${area.name}，坐标: [${area.center}]，缩放级别: ${area.zoom}`);
+        }
+
+        // 切换图层显示
+        function toggleLayer(type) {
+            // 更新按钮状态
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                if (btn.textContent.includes('显示') || btn.textContent.includes('风险')) {
+                    btn.classList.remove('active');
+                }
+            });
+            event.target.classList.add('active');
+
+            // 显示/隐藏标记
+            markers.forEach(({ marker, data }) => {
+                if (type === 'all' || data.risk === type) {
+                    marker.show();
+                } else {
+                    marker.hide();
+                }
+            });
+        }
+
+        // 切换地图样式
+        function switchMapStyle(style) {
+            // 移除所有地图样式按钮的active状态
+            document.querySelectorAll('.control-btn').forEach(btn => {
+                if (btn.textContent.includes('卫星') || btn.textContent.includes('标准') || btn.textContent.includes('暗色')) {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // 设置当前按钮为active
+            event.target.classList.add('active');
+            
+            // 更新当前地图样式
+            currentMapStyle = style;
+            
+            // 应用地图样式
+            switch(style) {
+                case 'satellite':
+                    satelliteLayer.show();
+                    console.log('切换到卫星图');
+                    break;
+                case 'standard':
+                    satelliteLayer.hide();
+                    map.setMapStyle('amap://styles/normal');
+                    console.log('切换到标准图');
+                    break;
+                case 'dark':
+                    satelliteLayer.hide();
+                    map.setMapStyle('amap://styles/dark');
+                    console.log('切换到暗色图');
+                    break;
+                default:
+                    satelliteLayer.hide();
+                    map.setMapStyle('amap://styles/normal');
+                    console.log('默认使用标准图');
+            }
+        }
+
+        // 页面加载完成后初始化地图
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成，开始初始化地图...');
+            initMap();
+        });
+    </script>
+</body>
+</html>
