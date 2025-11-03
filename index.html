@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css?v=20251021" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.2.4/ol.css">
-  <script src="https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 
   <style>
@@ -23,6 +22,20 @@
     }
     html, body { height:100%; margin:0; background:var(--bg); color:#e8eefc; overflow:hidden; font-family:'Inter','Microsoft YaHei',sans-serif; }
     #map { position:absolute; inset:0; background: radial-gradient(1200px 800px at 50% 40%, #151b2a, #0b1220); z-index: 1; }
+    .map-error {
+      position:absolute;
+      inset:0;
+      z-index: 35;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0 24px;
+      background:rgba(11,18,32,0.92);
+      color:#ffb74d;
+      font-size:15px;
+      text-align:center;
+      backdrop-filter:blur(6px);
+    }
 
     .header { position:absolute; top:0; left:0; right:0; height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; background:var(--panel-strong); border-bottom:1px solid var(--line); backdrop-filter:var(--blur); box-shadow:var(--shadow); z-index:40;}
     .title { font-size:20px; font-weight:700; color:var(--blue); }
@@ -159,12 +172,6 @@
     } from './js/cloud-database.js';
 
     // -------- OpenLayers 初始化 --------
-    const { Map, View, layer, source, proj, style } = ol;
-    const { Tile, Vector, Image: ImageLayer, VectorTile } = layer;
-    const { XYZ, Vector: VectorSource, ImageWMS, OSM, VectorTile: VectorTileSource } = source;
-    const { fromLonLat } = proj;
-    const { Style, Fill, Stroke, Circle: CircleStyle, Text } = style;
-
     let map, baseSatellite, baseTerrain, baseOSM;
     let provinceOutlineWMS;     // 省界（WMS）
     let provinceOutlineVector;  // 省界（可选：GeoJSON/矢量瓦片）
@@ -180,15 +187,114 @@
     // 2) 矢量瓦片（MVT）URL模板（可选），如 "https://{a-c}.server/tiles/{z}/{x}/{y}.pbf"
     const MVT_URL = ""; // 设置后会优先生效
 
-    function initMap(){
-      baseSatellite = new Tile({ source: new XYZ({ url:'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', crossOrigin:'anonymous' }), visible:true }); baseSatellite.setZIndex(0);
-      baseTerrain   = new Tile({ source: new XYZ({ url:'https://services.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', crossOrigin:'anonymous' }), visible:false }); baseTerrain.setZIndex(0);
-      baseOSM       = new Tile({ source: new OSM({crossOrigin:'anonymous'}), visible:false }); baseOSM.setZIndex(0);
+    let MapCtor, ViewCtor, TileLayerCtor, VectorLayerCtor, ImageLayerCtor, VectorTileLayerCtor;
+    let XYZSourceCtor, VectorSourceCtor, ImageWMSSourceCtor, OSMSrcCtor, VectorTileSourceCtor;
+    let StyleCtor, FillCtor, StrokeCtor, CircleStyleCtor, TextCtor, FeatureCtor, PointGeomCtor, CircleGeomCtor, GeoJSONFormatCtor, MVTFormatCtor, fromLonLatFn;
+    let mapErrorOverlay = null;
+
+    function ensureOpenLayers(){
+      if (window.ol) return Promise.resolve(window.ol);
+      if (ensureOpenLayers.promise) return ensureOpenLayers.promise;
+      ensureOpenLayers.promise = new Promise((resolve, reject) => {
+        const scriptId = 'openlayers-script';
+        let script = document.getElementById(scriptId);
+        const onLoad = () => {
+          cleanup();
+          if (window.ol) {
+            resolve(window.ol);
+          } else {
+            reject(new Error('OpenLayers 已加载但未找到全局变量。'));
+          }
+        };
+        const onError = () => {
+          if (script && script.parentNode){
+            script.parentNode.removeChild(script);
+            script = null;
+          }
+          cleanup();
+          reject(new Error('无法加载 OpenLayers 库。'));
+        };
+        const cleanup = () => {
+          if (script) {
+            script.removeEventListener('load', onLoad);
+            script.removeEventListener('error', onError);
+          }
+        };
+        if (!script) {
+          script = document.createElement('script');
+          script.id = scriptId;
+          script.src = 'https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js';
+          script.async = true;
+          script.crossOrigin = 'anonymous';
+          script.addEventListener('load', onLoad);
+          script.addEventListener('error', onError);
+          document.head.appendChild(script);
+        } else {
+          script.addEventListener('load', onLoad);
+          script.addEventListener('error', onError);
+        }
+        if (window.ol) {
+          cleanup();
+          resolve(window.ol);
+        }
+      }).catch(error => {
+        ensureOpenLayers.promise = null;
+        throw error;
+      });
+      return ensureOpenLayers.promise;
+    }
+
+    function showMapError(message){
+      if (!mapErrorOverlay){
+        mapErrorOverlay = document.createElement('div');
+        mapErrorOverlay.className = 'map-error';
+        document.body.appendChild(mapErrorOverlay);
+      }
+      mapErrorOverlay.textContent = message;
+    }
+
+    function clearMapError(){
+      if (mapErrorOverlay){
+        mapErrorOverlay.remove();
+        mapErrorOverlay = null;
+      }
+    }
+
+    async function initMap(){
+      const ol = await ensureOpenLayers();
+      if (!ol) throw new Error('OpenLayers 未就绪');
+
+      MapCtor = ol.Map;
+      ViewCtor = ol.View;
+      TileLayerCtor = ol.layer.Tile;
+      VectorLayerCtor = ol.layer.Vector;
+      ImageLayerCtor = ol.layer.Image;
+      VectorTileLayerCtor = ol.layer.VectorTile;
+      XYZSourceCtor = ol.source.XYZ;
+      VectorSourceCtor = ol.source.Vector;
+      ImageWMSSourceCtor = ol.source.ImageWMS;
+      OSMSrcCtor = ol.source.OSM;
+      VectorTileSourceCtor = ol.source.VectorTile;
+      StyleCtor = ol.style.Style;
+      FillCtor = ol.style.Fill;
+      StrokeCtor = ol.style.Stroke;
+      CircleStyleCtor = ol.style.Circle;
+      TextCtor = ol.style.Text;
+      FeatureCtor = ol.Feature;
+      PointGeomCtor = ol.geom.Point;
+      CircleGeomCtor = ol.geom.Circle;
+      GeoJSONFormatCtor = ol.format?.GeoJSON;
+      MVTFormatCtor = ol.format?.MVT;
+      fromLonLatFn = ol.proj.fromLonLat;
+
+      baseSatellite = new TileLayerCtor({ source: new XYZSourceCtor({ url:'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', crossOrigin:'anonymous' }), visible:true }); baseSatellite.setZIndex(0);
+      baseTerrain   = new TileLayerCtor({ source: new XYZSourceCtor({ url:'https://services.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', crossOrigin:'anonymous' }), visible:false }); baseTerrain.setZIndex(0);
+      baseOSM       = new TileLayerCtor({ source: new OSMSrcCtor({crossOrigin:'anonymous'}), visible:false }); baseOSM.setZIndex(0);
 
       // 省界（默认：WMS；若配置了MVT或GeoJSON则叠加/替换）
-      provinceOutlineWMS = new ImageLayer({
+      provinceOutlineWMS = new ImageLayerCtor({
         className: 'province-wms',
-        source: new ImageWMS({
+        source: new ImageWMSSourceCtor({
           url: 'https://ahocevar.com/geoserver/wms',
           params: { 'LAYERS': 'ne:ne_10m_admin_1_states_provinces_lines_shp', 'TILED': true, 'TRANSPARENT': true },
           ratio: 1, crossOrigin:'anonymous'
@@ -196,23 +302,23 @@
         opacity: 1, visible: true
       }); provinceOutlineWMS.setZIndex(10);
 
-      riskLayer = new Vector({
-        source: new VectorSource(),
-        style: new Style({ fill: new Fill({color: 'rgba(255,100,100,0.18)'}), stroke: new Stroke({color: '#ff5252', width: 2}) }),
+      riskLayer = new VectorLayerCtor({
+        source: new VectorSourceCtor(),
+        style: new StyleCtor({ fill: new FillCtor({color: 'rgba(255,100,100,0.18)'}), stroke: new StrokeCtor({color: '#ff5252', width: 2}) }),
         visible: false
       }); riskLayer.setZIndex(20);
 
-      monitoringLayer = new Vector({
-        source: new VectorSource(),
-        style: f => new Style({
-          image: new CircleStyle({ radius: 7, fill: new Fill({color: '#4fc3f7'}), stroke: new Stroke({color:'#0b1220', width: 2}) }),
-          text: new Text({ text: f.get('name') || '', font: '12px "Microsoft YaHei", Inter, sans-serif', fill: new Fill({color:'#ffffff'}), stroke: new Stroke({color:'#0b1220', width: 3}), offsetY: -16 })
+      monitoringLayer = new VectorLayerCtor({
+        source: new VectorSourceCtor(),
+        style: f => new StyleCtor({
+          image: new CircleStyleCtor({ radius: 7, fill: new FillCtor({color: '#4fc3f7'}), stroke: new StrokeCtor({color:'#0b1220', width: 2}) }),
+          text: new TextCtor({ text: f.get('name') || '', font: '12px "Microsoft YaHei", Inter, sans-serif', fill: new FillCtor({color:'#ffffff'}), stroke: new StrokeCtor({color:'#0b1220', width: 3}), offsetY: -16 })
         }),
         visible: true
       }); monitoringLayer.setZIndex(30);
 
-      const view = new View({ center: fromLonLat([119.5,26.8]), zoom: 7 });
-      map = new Map({ target:'map', layers:[baseSatellite, baseTerrain, baseOSM, provinceOutlineWMS, riskLayer, monitoringLayer], view });
+      const view = new ViewCtor({ center: fromLonLatFn([119.5,26.8]), zoom: 7 });
+      map = new MapCtor({ target:'map', layers:[baseSatellite, baseTerrain, baseOSM, provinceOutlineWMS, riskLayer, monitoringLayer], view });
       setTimeout(()=> map.updateSize(), 80);
 
       loadMonitoringPoints();
@@ -221,33 +327,34 @@
       setupOptionalVectorBoundary(); // 如果你配置了 GEOJSON_URL 或 MVT_URL，这里会加载
       bindUI();
       guardTiles();
+      clearMapError();
     }
 
     function setupOptionalVectorBoundary(){
       // 若配置了矢量瓦片（MVT），优先生效
-      if (MVT_URL){
-        provinceOutlineVector = new VectorTile({
-          source: new VectorTileSource({
-            format: new ol.format.MVT(),
+      if (MVT_URL && VectorTileLayerCtor && VectorTileSourceCtor && MVTFormatCtor){
+        provinceOutlineVector = new VectorTileLayerCtor({
+          source: new VectorTileSourceCtor({
+            format: new MVTFormatCtor(),
             url: MVT_URL,
             maxZoom: 14
           }),
-          style: new Style({
-            stroke: new Stroke({ color: '#00baff', width: 2 })
+          style: new StyleCtor({
+            stroke: new StrokeCtor({ color: '#00baff', width: 2 })
           }),
           visible: true
         });
         provinceOutlineVector.setZIndex(11);
         map.addLayer(provinceOutlineVector);
-      } else if (GEOJSON_URL){
+      } else if (GEOJSON_URL && GeoJSONFormatCtor){
         // GeoJSON 边界
-        provinceOutlineVector = new Vector({
-          source: new VectorSource({
+        provinceOutlineVector = new VectorLayerCtor({
+          source: new VectorSourceCtor({
             url: GEOJSON_URL,
-            format: new ol.format.GeoJSON()
+            format: new GeoJSONFormatCtor()
           }),
-          style: new Style({
-            stroke: new Stroke({ color: '#00baff', width: 2 })
+          style: new StyleCtor({
+            stroke: new StrokeCtor({ color: '#00baff', width: 2 })
           }),
           visible: true
         });
@@ -257,13 +364,14 @@
     }
 
     function renderMonitoringPoints(points = []){
+      if (!monitoringLayer || !FeatureCtor || !PointGeomCtor || !fromLonLatFn) return;
       const src = monitoringLayer.getSource();
       src.clear();
       points
         .filter(p => typeof p.lon === 'number' && typeof p.lat === 'number')
         .forEach((p) => {
-          const feature = new ol.Feature({
-            geometry: new ol.geom.Point(fromLonLat([p.lon, p.lat])),
+          const feature = new FeatureCtor({
+            geometry: new PointGeomCtor(fromLonLatFn([p.lon, p.lat])),
             name: p.name || '监测点'
           });
           src.addFeature(feature);
@@ -282,14 +390,15 @@
     }
 
     function renderRiskAreas(areas = []){
+      if (!riskLayer || !FeatureCtor || !CircleGeomCtor || !fromLonLatFn) return;
       const src = riskLayer.getSource();
       src.clear();
       areas
         .filter(a => typeof a.lon === 'number' && typeof a.lat === 'number')
         .forEach((area) => {
           const radius = Number(area.radius) > 0 ? Number(area.radius) : 1000;
-          const circle = new ol.geom.Circle(fromLonLat([area.lon, area.lat]), radius);
-          const feature = new ol.Feature({ geometry: circle, name: area.name || '风险区域' });
+          const circle = new CircleGeomCtor(fromLonLatFn([area.lon, area.lat]), radius);
+          const feature = new FeatureCtor({ geometry: circle, name: area.name || '风险区域' });
           src.addFeature(feature);
         });
     }
@@ -392,7 +501,10 @@
     document.addEventListener('DOMContentLoaded', ()=>{
       updateCloudStatusIndicator();
       tickTime();
-      initMap();
+      initMap().catch((error)=>{
+        console.error('地图初始化失败', error);
+        showMapError('地图底图加载失败，请检查网络或稍后重试。');
+      });
     });
   </script>
 </body>
