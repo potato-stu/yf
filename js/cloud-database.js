@@ -1,16 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-
 const firebaseConfig = {
   apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -107,28 +94,55 @@ const configReady = requiredKeys.every((key) => {
   return typeof value === "string" && value.trim() !== "" && !isPlaceholder(value);
 });
 
-let db = null;
+let firestoreRefs = null;
+let ensurePromise = null;
 let usingFallback = !configReady;
 
-if (configReady) {
-  try {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    usingFallback = false;
-  } catch (error) {
-    console.warn("未能初始化 Firebase，已回退至本地演示数据。", error);
-    db = null;
-    usingFallback = true;
-  }
-} else {
+if (!configReady) {
   console.info("Firebase 配置未设置，使用本地演示数据运行。请在 js/cloud-database.js 中填写配置。");
+}
+
+async function ensureFirestore() {
+  if (!configReady) {
+    usingFallback = true;
+    return null;
+  }
+  if (firestoreRefs) {
+    return firestoreRefs;
+  }
+  if (!ensurePromise) {
+    ensurePromise = (async () => {
+      try {
+        const [appModule, firestoreModule] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js")
+        ]);
+        const app = appModule.initializeApp(firebaseConfig);
+        const db = firestoreModule.getFirestore(app);
+        firestoreRefs = {
+          db,
+          ...firestoreModule
+        };
+        usingFallback = false;
+        return firestoreRefs;
+      } catch (error) {
+        console.warn("未能初始化 Firebase，已回退至本地演示数据。", error);
+        firestoreRefs = null;
+        usingFallback = true;
+        return null;
+      } finally {
+        ensurePromise = null;
+      }
+    })();
+  }
+  return ensurePromise;
 }
 
 function normalizeTimestamp(value) {
   if (!value) return null;
   if (typeof value === "string") return value;
   if (value instanceof Date) return value.toISOString();
-  if (typeof value.toDate === "function") {
+  if (typeof value?.toDate === "function") {
     try {
       return value.toDate().toISOString();
     } catch (error) {
@@ -138,20 +152,69 @@ function normalizeTimestamp(value) {
   return null;
 }
 
-async function withFallback(asyncTask, fallback) {
-  if (!db) {
+async function withFirestore(task, fallback, errorMessage = "云数据库访问失败，使用演示数据。") {
+  const refs = await ensureFirestore();
+  if (!refs) {
     usingFallback = true;
     return clone(fallback);
   }
   try {
-    const result = await asyncTask();
+    const result = await task(refs);
     usingFallback = false;
     return result;
   } catch (error) {
-    console.warn("云数据库访问失败，回退至本地演示数据。", error);
+    console.warn(errorMessage, error);
     usingFallback = true;
     return clone(fallback);
   }
+}
+
+function createSubscription(callback, fallback, subscribeFactory, errorMessage) {
+  if (typeof callback !== "function") {
+    return () => {};
+  }
+  let unsubscribe = null;
+  let active = true;
+
+  const emitFallback = () => {
+    if (!active) return;
+    usingFallback = true;
+    callback(clone(fallback));
+  };
+
+  const handleError = (error) => {
+    if (errorMessage) {
+      console.warn(errorMessage, error);
+    }
+    emitFallback();
+  };
+
+  ensureFirestore().then((refs) => {
+    if (!active) return;
+    if (!refs) {
+      emitFallback();
+      return;
+    }
+    try {
+      const unsub = subscribeFactory(refs, callback, handleError);
+      if (typeof unsub === "function") {
+        unsubscribe = unsub;
+      }
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+  if (!configReady) {
+    emitFallback();
+  }
+
+  return () => {
+    active = false;
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+    }
+  };
 }
 
 function toMonitoringSite(docSnap) {
@@ -192,185 +255,188 @@ function toWarning(docSnap) {
 }
 
 export async function fetchMonitoringSites() {
-  return withFallback(async () => {
-    const snap = await getDocs(collection(db, "monitoringSites"));
-    return snap.docs.map(toMonitoringSite);
-  }, fallbackData.monitoringSites);
+  return withFirestore(
+    async ({ db, collection, getDocs }) => {
+      const snap = await getDocs(collection(db, "monitoringSites"));
+      return snap.docs.map(toMonitoringSite);
+    },
+    fallbackData.monitoringSites,
+    "监测点获取失败，使用演示数据。"
+  );
 }
 
 export function subscribeMonitoringSites(callback) {
-  if (!db) {
-    callback(clone(fallbackData.monitoringSites));
-    usingFallback = true;
-    return () => {};
-  }
-  const unsubscribe = onSnapshot(
-    collection(db, "monitoringSites"),
-    (snapshot) => {
-      usingFallback = false;
-      callback(snapshot.docs.map(toMonitoringSite));
-    },
-    (error) => {
-      console.warn("监测点订阅失败，使用演示数据。", error);
-      usingFallback = true;
-      callback(clone(fallbackData.monitoringSites));
-    }
+  return createSubscription(
+    callback,
+    fallbackData.monitoringSites,
+    ({ db, collection, onSnapshot }, next, handleError) =>
+      onSnapshot(
+        collection(db, "monitoringSites"),
+        (snapshot) => {
+          usingFallback = false;
+          next(snapshot.docs.map(toMonitoringSite));
+        },
+        handleError
+      ),
+    "监测点订阅失败，使用演示数据。"
   );
-  return unsubscribe;
 }
 
 export async function fetchRiskAreas() {
-  return withFallback(async () => {
-    const snap = await getDocs(collection(db, "riskAreas"));
-    return snap.docs.map(toRiskArea);
-  }, fallbackData.riskAreas);
+  return withFirestore(
+    async ({ db, collection, getDocs }) => {
+      const snap = await getDocs(collection(db, "riskAreas"));
+      return snap.docs.map(toRiskArea);
+    },
+    fallbackData.riskAreas,
+    "风险区域获取失败，使用演示数据。"
+  );
 }
 
 export function subscribeRiskAreas(callback) {
-  if (!db) {
-    callback(clone(fallbackData.riskAreas));
-    usingFallback = true;
-    return () => {};
-  }
-  const unsubscribe = onSnapshot(
-    collection(db, "riskAreas"),
-    (snapshot) => {
-      usingFallback = false;
-      callback(snapshot.docs.map(toRiskArea));
-    },
-    (error) => {
-      console.warn("风险区域订阅失败，使用演示数据。", error);
-      usingFallback = true;
-      callback(clone(fallbackData.riskAreas));
-    }
+  return createSubscription(
+    callback,
+    fallbackData.riskAreas,
+    ({ db, collection, onSnapshot }, next, handleError) =>
+      onSnapshot(
+        collection(db, "riskAreas"),
+        (snapshot) => {
+          usingFallback = false;
+          next(snapshot.docs.map(toRiskArea));
+        },
+        handleError
+      ),
+    "风险区域订阅失败，使用演示数据。"
   );
-  return unsubscribe;
 }
 
 export async function fetchDashboardStats() {
-  return withFallback(async () => {
-    const snap = await getDoc(doc(db, "dashboard", "status"));
-    if (!snap.exists()) return clone(fallbackData.dashboardStats);
-    const data = snap.data();
-    return {
-      monitoring: Number(data?.monitoring ?? data?.monitoringCount ?? 0),
-      warning: Number(data?.warning ?? data?.warningCount ?? 0),
-      safe: Number(data?.safe ?? data?.safeCount ?? 0)
-    };
-  }, fallbackData.dashboardStats);
-}
-
-export function subscribeDashboardStats(callback) {
-  if (!db) {
-    callback(clone(fallbackData.dashboardStats));
-    usingFallback = true;
-    return () => {};
-  }
-  const unsubscribe = onSnapshot(
-    doc(db, "dashboard", "status"),
-    (snapshot) => {
-      usingFallback = false;
-      if (!snapshot.exists()) {
-        callback(clone(fallbackData.dashboardStats));
-        return;
-      }
-      const data = snapshot.data();
-      callback({
+  return withFirestore(
+    async ({ db, doc, getDoc }) => {
+      const snap = await getDoc(doc(db, "dashboard", "status"));
+      if (!snap.exists()) return clone(fallbackData.dashboardStats);
+      const data = snap.data();
+      return {
         monitoring: Number(data?.monitoring ?? data?.monitoringCount ?? 0),
         warning: Number(data?.warning ?? data?.warningCount ?? 0),
         safe: Number(data?.safe ?? data?.safeCount ?? 0)
-      });
+      };
     },
-    (error) => {
-      console.warn("仪表盘统计订阅失败，使用演示数据。", error);
-      usingFallback = true;
-      callback(clone(fallbackData.dashboardStats));
-    }
+    fallbackData.dashboardStats,
+    "仪表盘统计获取失败，使用演示数据。"
   );
-  return unsubscribe;
+}
+
+export function subscribeDashboardStats(callback) {
+  return createSubscription(
+    callback,
+    fallbackData.dashboardStats,
+    ({ db, doc, onSnapshot }, next, handleError) =>
+      onSnapshot(
+        doc(db, "dashboard", "status"),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            usingFallback = true;
+            next(clone(fallbackData.dashboardStats));
+            return;
+          }
+          usingFallback = false;
+          const data = snapshot.data();
+          next({
+            monitoring: Number(data?.monitoring ?? data?.monitoringCount ?? 0),
+            warning: Number(data?.warning ?? data?.warningCount ?? 0),
+            safe: Number(data?.safe ?? data?.safeCount ?? 0)
+          });
+        },
+        handleError
+      ),
+    "仪表盘统计订阅失败，使用演示数据。"
+  );
 }
 
 export async function fetchWarningStats() {
-  return withFallback(async () => {
-    const snap = await getDoc(doc(db, "dashboard", "warningStats"));
-    if (!snap.exists()) return clone(fallbackData.warningStats);
-    const data = snap.data();
-    return {
-      highRisk: Number(data?.highRisk ?? data?.high ?? 0),
-      mediumRisk: Number(data?.mediumRisk ?? data?.medium ?? 0),
-      lowRisk: Number(data?.lowRisk ?? data?.low ?? 0),
-      timelyRate: Number(data?.timelyRate ?? data?.timely ?? 0)
-    };
-  }, fallbackData.warningStats);
-}
-
-export function subscribeWarningStats(callback) {
-  if (!db) {
-    callback(clone(fallbackData.warningStats));
-    usingFallback = true;
-    return () => {};
-  }
-  const unsubscribe = onSnapshot(
-    doc(db, "dashboard", "warningStats"),
-    (snapshot) => {
-      usingFallback = false;
-      if (!snapshot.exists()) {
-        callback(clone(fallbackData.warningStats));
-        return;
-      }
-      const data = snapshot.data();
-      callback({
+  return withFirestore(
+    async ({ db, doc, getDoc }) => {
+      const snap = await getDoc(doc(db, "dashboard", "warningStats"));
+      if (!snap.exists()) return clone(fallbackData.warningStats);
+      const data = snap.data();
+      return {
         highRisk: Number(data?.highRisk ?? data?.high ?? 0),
         mediumRisk: Number(data?.mediumRisk ?? data?.medium ?? 0),
         lowRisk: Number(data?.lowRisk ?? data?.low ?? 0),
         timelyRate: Number(data?.timelyRate ?? data?.timely ?? 0)
-      });
+      };
     },
-    (error) => {
-      console.warn("预警统计订阅失败，使用演示数据。", error);
-      usingFallback = true;
-      callback(clone(fallbackData.warningStats));
-    }
+    fallbackData.warningStats,
+    "预警统计获取失败，使用演示数据。"
   );
-  return unsubscribe;
+}
+
+export function subscribeWarningStats(callback) {
+  return createSubscription(
+    callback,
+    fallbackData.warningStats,
+    ({ db, doc, onSnapshot }, next, handleError) =>
+      onSnapshot(
+        doc(db, "dashboard", "warningStats"),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            usingFallback = true;
+            next(clone(fallbackData.warningStats));
+            return;
+          }
+          usingFallback = false;
+          const data = snapshot.data();
+          next({
+            highRisk: Number(data?.highRisk ?? data?.high ?? 0),
+            mediumRisk: Number(data?.mediumRisk ?? data?.medium ?? 0),
+            lowRisk: Number(data?.lowRisk ?? data?.low ?? 0),
+            timelyRate: Number(data?.timelyRate ?? data?.timely ?? 0)
+          });
+        },
+        handleError
+      ),
+    "预警统计订阅失败，使用演示数据。"
+  );
 }
 
 export async function fetchWarningEvents(limitCount = 20) {
-  return withFallback(async () => {
-    const q = query(
-      collection(db, "warnings"),
-      orderBy("issuedAt", "desc"),
-      limit(limitCount)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(toWarning);
-  }, fallbackData.warnings);
+  return withFirestore(
+    async ({ db, collection, getDocs, limit, orderBy, query }) => {
+      const q = query(
+        collection(db, "warnings"),
+        orderBy("issuedAt", "desc"),
+        limit(limitCount)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(toWarning);
+    },
+    fallbackData.warnings,
+    "预警事件获取失败，使用演示数据。"
+  );
 }
 
 export function subscribeWarningEvents(callback, limitCount = 20) {
-  if (!db) {
-    callback(clone(fallbackData.warnings));
-    usingFallback = true;
-    return () => {};
-  }
-  const q = query(
-    collection(db, "warnings"),
-    orderBy("issuedAt", "desc"),
-    limit(limitCount)
-  );
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      usingFallback = false;
-      callback(snapshot.docs.map(toWarning));
+  return createSubscription(
+    callback,
+    fallbackData.warnings,
+    ({ db, collection, limit, onSnapshot, orderBy, query }, next, handleError) => {
+      const q = query(
+        collection(db, "warnings"),
+        orderBy("issuedAt", "desc"),
+        limit(limitCount)
+      );
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          usingFallback = false;
+          next(snapshot.docs.map(toWarning));
+        },
+        handleError
+      );
     },
-    (error) => {
-      console.warn("预警事件订阅失败，使用演示数据。", error);
-      usingFallback = true;
-      callback(clone(fallbackData.warnings));
-    }
+    "预警事件订阅失败，使用演示数据。"
   );
-  return unsubscribe;
 }
 
 export function getCloudStatus() {
