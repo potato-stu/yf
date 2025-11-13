@@ -125,6 +125,21 @@
             font-size: 14px;
         }
 
+        .data-source-chip {
+            padding: 4px 12px;
+            border-radius: 14px;
+            background: rgba(0, 212, 255, 0.15);
+            border: 1px solid rgba(0, 212, 255, 0.4);
+            color: var(--primary-blue);
+            font-size: 12px;
+        }
+
+        .data-source-chip.offline {
+            background: rgba(255, 107, 53, 0.15);
+            border-color: rgba(255, 107, 53, 0.4);
+            color: var(--warning-orange);
+        }
+
         .status-dot {
             width: 12px;
             height: 12px;
@@ -261,6 +276,15 @@
             max-height: 500px;
             overflow-y: auto;
             padding: 20px;
+        }
+
+        .warning-empty {
+            padding: 20px;
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+            background: rgba(45, 55, 72, 0.2);
+            color: var(--text-secondary);
+            text-align: center;
         }
 
         .warning-item {
@@ -486,7 +510,7 @@
         <!-- 顶部导航 -->
         <nav class="top-nav">
     <div class="nav-left">
-        <a href="./index.html" class="back-btn" onclick="console.log('点击返回按钮')">
+        <a href="./index.html" class="back-btn">
             ← 返回主界面
         </a>
                 <h1 class="module-title">⚠️ 智能预警模块</h1>
@@ -495,6 +519,7 @@
                 <div class="status-dot"></div>
                 <span>预警系统监控中</span>
                 <span id="currentTime"></span>
+                <span id="warningDataSource" class="data-source-chip offline">数据源：本地演示</span>
             </div>
         </nav>
 
@@ -502,22 +527,22 @@
         <div class="warning-overview">
             <div class="warning-card high-risk">
                 <div class="warning-icon">🚨</div>
-                <div class="warning-value">3</div>
+                <div class="warning-value" data-warning-stat="high">3</div>
                 <div class="warning-label">高风险预警</div>
             </div>
             <div class="warning-card medium-risk">
                 <div class="warning-icon">⚠️</div>
-                <div class="warning-value">8</div>
+                <div class="warning-value" data-warning-stat="medium">8</div>
                 <div class="warning-label">中风险预警</div>
             </div>
             <div class="warning-card low-risk">
                 <div class="warning-icon">ℹ️</div>
-                <div class="warning-value">12</div>
+                <div class="warning-value" data-warning-stat="low">12</div>
                 <div class="warning-label">低风险预警</div>
             </div>
             <div class="warning-card">
                 <div class="warning-icon">📊</div>
-                <div class="warning-value" style="color: var(--primary-blue);">98.5%</div>
+                <div class="warning-value" data-warning-stat="timelyRate" style="color: var(--primary-blue);">98.5%</div>
                 <div class="warning-label">预警及时率</div>
             </div>
         </div>
@@ -529,68 +554,13 @@
                 <div class="section-header">
                     <h3 class="section-title">🔔 活跃预警列表</h3>
                     <div class="filter-buttons">
-                        <button class="filter-btn active" onclick="filterWarnings('all')">全部</button>
-                        <button class="filter-btn" onclick="filterWarnings('high')">高风险</button>
-                        <button class="filter-btn" onclick="filterWarnings('medium')">中风险</button>
-                        <button class="filter-btn" onclick="filterWarnings('low')">低风险</button>
+                        <button class="filter-btn active" data-filter="all">全部</button>
+                        <button class="filter-btn" data-filter="high">高风险</button>
+                        <button class="filter-btn" data-filter="medium">中风险</button>
+                        <button class="filter-btn" data-filter="low">低风险</button>
                     </div>
                 </div>
-                <div class="warning-list">
-                    <div class="warning-item high" onclick="showWarningDetail('W001')">
-                        <div class="warning-header">
-                            <span class="warning-id">W001 - 福建武平滑坡预警</span>
-                            <span class="warning-level level-high">高风险</span>
-                        </div>
-                        <div class="warning-info">
-                            降雨量: 156mm/24h | 土壤含水率: 85% | 坡度: 45°
-                        </div>
-                        <div class="warning-time">2024-01-15 14:30:25</div>
-                    </div>
-
-                    <div class="warning-item medium" onclick="showWarningDetail('W002')">
-                        <div class="warning-header">
-                            <span class="warning-id">W002 - 浙江泰顺地质预警</span>
-                            <span class="warning-level level-medium">中风险</span>
-                        </div>
-                        <div class="warning-info">
-                            降雨量: 89mm/24h | 土壤含水率: 68% | 坡度: 38°
-                        </div>
-                        <div class="warning-time">2024-01-15 13:45:12</div>
-                    </div>
-
-                    <div class="warning-item high" onclick="showWarningDetail('W003')">
-                        <div class="warning-header">
-                            <span class="warning-id">W003 - 江西赣州山体预警</span>
-                            <span class="warning-level level-high">高风险</span>
-                        </div>
-                        <div class="warning-info">
-                            降雨量: 178mm/24h | 土壤含水率: 92% | 坡度: 52°
-                        </div>
-                        <div class="warning-time">2024-01-15 12:20:08</div>
-                    </div>
-
-                    <div class="warning-item medium" onclick="showWarningDetail('W004')">
-                        <div class="warning-header">
-                            <span class="warning-id">W004 - 福建三明监测预警</span>
-                            <span class="warning-level level-medium">中风险</span>
-                        </div>
-                        <div class="warning-info">
-                            降雨量: 76mm/24h | 土壤含水率: 72% | 坡度: 33°
-                        </div>
-                        <div class="warning-time">2024-01-15 11:15:33</div>
-                    </div>
-
-                    <div class="warning-item low" onclick="showWarningDetail('W005')">
-                        <div class="warning-header">
-                            <span class="warning-id">W005 - 浙江温州观测预警</span>
-                            <span class="warning-level level-low">低风险</span>
-                        </div>
-                        <div class="warning-info">
-                            降雨量: 45mm/24h | 土壤含水率: 55% | 坡度: 28°
-                        </div>
-                        <div class="warning-time">2024-01-15 10:30:15</div>
-                    </div>
-                </div>
+                <div class="warning-list" id="warningList"></div>
             </div>
 
             <!-- 侧边栏 -->
@@ -649,19 +619,19 @@
             <div class="setting-item">
                 <span class="setting-label">自动预警</span>
                 <div class="setting-control">
-                    <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+                    <div class="toggle-switch active"></div>
                 </div>
             </div>
             <div class="setting-item">
                 <span class="setting-label">短信通知</span>
                 <div class="setting-control">
-                    <div class="toggle-switch active" onclick="toggleSetting(this)"></div>
+                    <div class="toggle-switch active"></div>
                 </div>
             </div>
             <div class="setting-item">
                 <span class="setting-label">邮件通知</span>
                 <div class="setting-control">
-                    <div class="toggle-switch" onclick="toggleSetting(this)"></div>
+                    <div class="toggle-switch"></div>
                 </div>
             </div>
             <div class="setting-item">
@@ -679,35 +649,245 @@
         </div>
     </div>
 
-    <script>
-        // 过滤预警
-        function filterWarnings(level) {
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
+    <script type="module">
+        import {
+            fetchWarningEvents,
+            subscribeWarningEvents,
+            fetchWarningStats,
+            subscribeWarningStats,
+            getCloudStatus
+        } from './js/cloud-database.js';
 
-            const items = document.querySelectorAll('.warning-item');
+        let currentFilter = 'all';
+        let unsubscribeWarnings = null;
+        let unsubscribeStats = null;
+
+        function setupFilters() {
+            document.querySelectorAll('.filter-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    applyFilter(button.dataset.filter || 'all');
+                });
+            });
+        }
+
+        function applyFilter(level) {
+            currentFilter = level;
+            const list = document.getElementById('warningList');
+            if (!list) return;
+            const items = Array.from(list.querySelectorAll('.warning-item'));
+            const placeholder = list.querySelector('.warning-empty[data-role="filter"]');
+
+            if (!items.length) {
+                if (placeholder) {
+                    placeholder.style.display = 'block';
+                }
+                return;
+            }
+
+            let visibleCount = 0;
             items.forEach(item => {
-                if (level === 'all' || item.classList.contains(level)) {
-                    item.style.display = 'block';
+                const matches = level === 'all' || item.dataset.level === level;
+                item.style.display = matches ? '' : 'none';
+                if (matches) visibleCount++;
+            });
+
+            if (placeholder) {
+                placeholder.style.display = visibleCount === 0 ? 'block' : 'none';
+            }
+        }
+
+        function renderWarningStats(stats = {}) {
+            document.querySelectorAll('[data-warning-stat]').forEach(node => {
+                const key = node.dataset.warningStat;
+                const value = stats?.[key];
+                if (key === 'timelyRate') {
+                    const numeric = Number(value);
+                    node.textContent = Number.isFinite(numeric) ? `${numeric.toFixed(1)}%` : (value ?? '--');
                 } else {
-                    item.style.display = 'none';
+                    const numeric = Number(value);
+                    node.textContent = Number.isFinite(numeric) ? numeric.toLocaleString('zh-CN') : (value ?? '0');
                 }
             });
         }
 
-        // 显示预警详情
-        function showWarningDetail(id) {
-            alert(`预警详情: ${id}\n\n详细信息：\n- 预警类型: 降雨型滑坡\n- 影响范围: 2.3km²\n- 威胁人口: 156人\n- 建议措施: 立即疏散\n- 预计持续: 6-12小时\n\n是否立即处理？`);
+        function renderWarnings(warnings = []) {
+            const list = document.getElementById('warningList');
+            if (!list) return;
+            list.innerHTML = '';
+            if (!warnings.length) {
+                list.appendChild(createEmptyElement('当前没有活跃预警事件。'));
+                return;
+            }
+
+            warnings.forEach(warning => {
+                list.appendChild(createWarningItem(warning));
+            });
+
+            const placeholder = createEmptyElement('当前筛选条件下没有活跃预警。');
+            placeholder.dataset.role = 'filter';
+            placeholder.style.display = 'none';
+            list.appendChild(placeholder);
+
+            applyFilter(currentFilter);
         }
 
-        // 切换设置
-        function toggleSetting(element) {
-            element.classList.toggle('active');
+        function createWarningItem(warning) {
+            const level = (warning.level || 'low').toLowerCase();
+            const item = document.createElement('div');
+            item.className = `warning-item ${level}`;
+            item.dataset.level = level;
+
+            const header = document.createElement('div');
+            header.className = 'warning-header';
+
+            const idSpan = document.createElement('span');
+            idSpan.className = 'warning-id';
+            const title = warning.title || '未命名预警';
+            const idLabel = warning.id ? `${warning.id} - ${title}` : title;
+            idSpan.textContent = idLabel;
+
+            const levelSpan = document.createElement('span');
+            levelSpan.className = `warning-level level-${level}`;
+            levelSpan.textContent = levelLabel(level);
+
+            header.appendChild(idSpan);
+            header.appendChild(levelSpan);
+
+            const info = document.createElement('div');
+            info.className = 'warning-info';
+            info.textContent = formatMetrics(warning);
+
+            const time = document.createElement('div');
+            time.className = 'warning-time';
+            time.textContent = formatIssuedAt(warning.issuedAt);
+
+            item.appendChild(header);
+            item.appendChild(info);
+            item.appendChild(time);
+
+            item.addEventListener('click', () => showWarningDetail(warning));
+
+            return item;
         }
 
-        // 更新时间
+        function levelLabel(level) {
+            switch (level) {
+                case 'high':
+                    return '高风险';
+                case 'medium':
+                    return '中风险';
+                case 'low':
+                    return '低风险';
+                default:
+                    return level || '未知';
+            }
+        }
+
+        function formatMetrics(warning) {
+            const segments = [];
+            if (warning.rainfall !== undefined && warning.rainfall !== null) {
+                segments.push(`降雨量: ${warning.rainfall}mm/24h`);
+            }
+            if (warning.soilMoisture !== undefined && warning.soilMoisture !== null) {
+                segments.push(`土壤含水率: ${warning.soilMoisture}%`);
+            }
+            if (warning.slope !== undefined && warning.slope !== null) {
+                segments.push(`坡度: ${warning.slope}°`);
+            }
+            if (warning.area) {
+                segments.push(`区域: ${warning.area}`);
+            }
+            return segments.join(' | ') || '暂无详细指标';
+        }
+
+        function formatIssuedAt(value) {
+            if (!value) return '时间未知';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return value;
+            return date.toLocaleString('zh-CN', { hour12: false });
+        }
+
+        function showWarningDetail(warning) {
+            const details = [
+                `预警编号：${warning.id || '未知'}`,
+                `预警名称：${warning.title || '未命名预警'}`,
+                `风险等级：${levelLabel((warning.level || '').toLowerCase())}`,
+                `覆盖区域：${warning.area || '未提供'}`,
+                `发布时间：${formatIssuedAt(warning.issuedAt)}`
+            ];
+
+            const metrics = [];
+            if (warning.rainfall !== undefined && warning.rainfall !== null) {
+                metrics.push(`降雨量 ${warning.rainfall}mm/24h`);
+            }
+            if (warning.soilMoisture !== undefined && warning.soilMoisture !== null) {
+                metrics.push(`土壤含水率 ${warning.soilMoisture}%`);
+            }
+            if (warning.slope !== undefined && warning.slope !== null) {
+                metrics.push(`坡度 ${warning.slope}°`);
+            }
+            if (metrics.length) {
+                details.push('', metrics.join(' | '));
+            }
+            if (warning.description) {
+                details.push('', warning.description);
+            }
+            alert(details.join('\n'));
+        }
+
+        function createEmptyElement(message) {
+            const empty = document.createElement('div');
+            empty.className = 'warning-empty';
+            empty.textContent = message;
+            return empty;
+        }
+
+        function attachToggleSwitches() {
+            document.querySelectorAll('.toggle-switch').forEach(toggle => {
+                toggle.addEventListener('click', () => toggle.classList.toggle('active'));
+            });
+        }
+
+        function updateCloudStatusBadge() {
+            const badge = document.getElementById('warningDataSource');
+            if (!badge) return;
+            badge.classList.remove('offline');
+            const status = getCloudStatus();
+            if (!status.configured) {
+                badge.textContent = '数据源：本地演示（待配置）';
+                badge.classList.add('offline');
+            } else if (status.usingFallback) {
+                badge.textContent = '数据源：演示数据（云端不可用）';
+                badge.classList.add('offline');
+            } else {
+                badge.textContent = '数据源：云数据库实时';
+            }
+        }
+
+        async function loadWarningStats() {
+            const stats = await fetchWarningStats();
+            renderWarningStats(stats);
+            updateCloudStatusBadge();
+            if (typeof unsubscribeStats === 'function') unsubscribeStats();
+            unsubscribeStats = subscribeWarningStats(latest => {
+                renderWarningStats(latest);
+                updateCloudStatusBadge();
+            });
+        }
+
+        async function loadWarningEvents() {
+            const events = await fetchWarningEvents();
+            renderWarnings(events);
+            updateCloudStatusBadge();
+            if (typeof unsubscribeWarnings === 'function') unsubscribeWarnings();
+            unsubscribeWarnings = subscribeWarningEvents(latest => {
+                renderWarnings(latest);
+                updateCloudStatusBadge();
+            });
+        }
+
         function updateTime() {
             const now = new Date();
             const timeString = now.toLocaleString('zh-CN', {
@@ -715,44 +895,17 @@
                 minute: '2-digit',
                 second: '2-digit'
             });
-            document.getElementById('currentTime').textContent = timeString;
+            const node = document.getElementById('currentTime');
+            if (node) node.textContent = timeString;
         }
 
-        // 模拟实时数据更新
-        function updateWarningData() {
-            // 更新预警数量
-            const warningValues = document.querySelectorAll('.warning-value');
-            warningValues.forEach((value, index) => {
-                if (index < 3) { // 只更新前三个预警数量
-                    const current = parseInt(value.textContent);
-                    const change = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
-                    const newValue = Math.max(0, current + change);
-                    value.textContent = newValue;
-                }
-            });
-
-            // 更新气象数据
-            const weatherValues = document.querySelectorAll('.weather-value');
-            weatherValues.forEach((value, index) => {
-                const text = value.textContent;
-                if (text.includes('mm')) {
-                    const current = parseInt(text);
-                    const newValue = Math.max(0, current + Math.floor(Math.random() * 10) - 5);
-                    value.textContent = newValue + 'mm';
-                } else if (text.includes('%') && !text.includes('.')) {
-                    const current = parseInt(text);
-                    const newValue = Math.max(0, Math.min(100, current + Math.floor(Math.random() * 6) - 3));
-                    value.textContent = newValue + '%';
-                }
-            });
-        }
-
-        // 页面初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('智能预警模块已加载');
+        document.addEventListener('DOMContentLoaded', async () => {
             updateTime();
             setInterval(updateTime, 1000);
-            setInterval(updateWarningData, 10000); // 每10秒更新一次数据
+            setupFilters();
+            attachToggleSwitches();
+            updateCloudStatusBadge();
+            await Promise.all([loadWarningStats(), loadWarningEvents()]);
         });
     </script>
 </body>
